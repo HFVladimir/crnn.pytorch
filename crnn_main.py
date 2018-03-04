@@ -28,7 +28,7 @@ parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. de
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
 parser.add_argument('--crnn', default='', help="path to crnn (to continue training)")
-parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz')
+parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz\'!?\\/#.,:@& %-+"')
 parser.add_argument('--experiment', default=None, help='Where to store samples and models')
 parser.add_argument('--displayInterval', type=int, default=500, help='Interval to be displayed')
 parser.add_argument('--n_test_disp', type=int, default=10, help='Number of samples to display when test')
@@ -37,7 +37,7 @@ parser.add_argument('--saveInterval', type=int, default=500, help='Interval to b
 parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
 parser.add_argument('--adadelta', action='store_true', help='Whether to use adadelta (default is rmsprop)')
 parser.add_argument('--keep_ratio', action='store_true', help='whether to keep ratio for image resize')
-parser.add_argument('--random_sample', action='store_true', help='whether to sample the dataset with random sampler')
+parser.add_argument('--random_sample', action='store_true', default=True, help='whether to sample the dataset with random sampler')
 opt = parser.parse_args()
 print(opt)
 
@@ -91,8 +91,19 @@ crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
 crnn.apply(weights_init)
 if opt.crnn != '':
     print('loading pretrained model from %s' % opt.crnn)
-    crnn.load_state_dict(torch.load(opt.crnn))
-print(crnn)
+    pre_trainmodel = torch.load(opt.crnn)
+    model_dict = crnn.state_dict()
+    weig1 = 'rnn.1.embedding.weight'
+    bias1 = 'rnn.1.embedding.bias'
+    if len(model_dict[weig1]) == len(pre_trainmodel[weig1]) and len(model_dict[bias1]) == len(pre_trainmodel[bias1]):
+        crnn.load_state_dict(pre_trainmodel)
+    else:
+        for k, v in model_dict.items():
+            if (k != weig1 and k != bias1):
+                model_dict[k] = pre_trainmodel[k]
+    crnn.load_state_dict(model_dict)
+    #crnn.load_state_dict(torch.load(opt.crnn))
+#print(crnn)
 
 image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
 text = torch.IntTensor(opt.batchSize * 5)
@@ -189,6 +200,7 @@ def trainBatch(net, criterion, optimizer):
 for epoch in range(opt.niter):
     train_iter = iter(train_loader)
     i = 0
+    print("Epoch: " + str(epoch))
     while i < len(train_loader):
         for p in crnn.parameters():
             p.requires_grad = True
